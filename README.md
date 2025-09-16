@@ -9,7 +9,8 @@ for activation :
 
 Windows (CMD/PowerShell):
 
-venv\Scripts\activate
+venv\Scripts\activate  -->> after running this, it's look like in terminal -->> (venv) C:\Users\ASUS\OneDrive\Desktop\DA\advocacy-chat>
+
 
 
 then run 
