@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Chat — {{ advocate.name }}</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: #f0f2f5;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .chat-container {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    .chat-header {
+      background: linear-gradient(45deg, #4facfe, #81f9ffff);
+      color: #fff;
+      padding: 1rem;
+    }
+    .chat-box {
+      height: 55vh;
+      overflow-y: auto;
+      padding: 1rem;
+      background: #fdfdfd;
+    }
+    .msg {
+      margin-bottom: 1rem;
+      max-width: 70%;
+      padding: 0.6rem 1rem;
+      border-radius: 15px;
+      position: relative;
+      word-wrap: break-word;
+    }
+    .msg.self {
+      margin-left: auto;
+      background: #4facfe;
+      color: #fff;
+      text-align: right;
+    }
+    .msg.other {
+      background: #e9ecef;
+      color: #333;
+    }
+    .msg .meta {
+      font-size: 0.75rem;
+      margin-top: 2px;
+      display: block;
+      opacity: 0.7;
+    }
+    .system {
+      font-style: italic;
+      color: #888;
+      text-align: center;
+      margin: 0.5rem 0;
+    }
+    .input-group input {
+      border-radius: 30px;
+      padding: 0.6rem 1rem;
+    }
+    .input-group button {
+      border-radius: 30px;
+      padding: 0.6rem 1.2rem;
+    }
+    .card {
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+  </style>
+</head>
+<body>
+  <div class="container py-4">
+    <a href="{{ url_for('index') }}" class="btn btn-sm btn-outline-secondary mb-3">&larr; Back to Advocates</a>
+    
+    <div class="row">
+      <!-- Chat Section -->
+      <div class="col-md-8 mb-3">
+        <div class="chat-container">
+          <div class="chat-header">
+            <h5 class="mb-0">{{ advocate.name }} <small class="text-light">— {{ advocate.specialty }}</small></h5>
+            <div class="small">{{ advocate.bio }}</div>
+          </div>
+          <div id="chat" class="chat-box">
+            {% for m in prev_msgs %}
+              {% if m.sender == 'System' %}
+                <div class="system">{{ m.text }} <span class="text-muted small">({{ m.timestamp }})</span></div>
+              {% else %}
+                <div class="msg {% if m.sender==client_name %}self{% else %}other{% endif %}">
+                  <div><strong>{{ m.sender }}</strong></div>
+                  <div>{{ m.text }}</div>
+                  <span class="meta">{{ m.timestamp }}</span>
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+          <div class="p-3 bg-light">
+            <div class="input-group">
+              <input id="message_input" type="text" class="form-control" placeholder="Type a message...">
+              <button id="send_btn" class="btn btn-primary">Send</button>
+            </div>
+          </div>
+        </div>
+        <small class="text-muted">You are chatting in <strong>{{ advocate.name }}</strong>'s room. Messages are real-time (demo).</small>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="col-md-4">
+        <!-- Meeting Form -->
+        <div class="card mb-3">
+          <div class="card-body">
+            <h5 class="card-title">Schedule a Meeting</h5>
+            <form id="schedule_form">
+              <input type="hidden" name="advocate_id" value="{{ advocate.id }}">
+              <div class="mb-2">
+                <label class="form-label">Your Name</label>
+                <input name="client_name" class="form-control" value="{{ client_name }}" required>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Date</label>
+                <input name="date" type="date" class="form-control" required>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Time</label>
+                <input name="time" type="time" class="form-control" required>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Purpose</label>
+                <input name="purpose" class="form-control" placeholder="e.g. Case discussion">
+              </div>
+              <button class="btn btn-success w-100" type="submit">Request Meeting</button>
+            </form>
+            <div id="schedule_status" class="mt-2"></div>
+          </div>
+        </div>
+
+        <!-- Meeting List -->
+        <div class="card">
+          <div class="card-body">
+            <h6 class="card-title">Upcoming Requests</h6>
+            <ul id="meeting_list" class="list-unstyled small">
+              {% for m in adv_meetings %}
+                <li class="mb-2">
+                  <strong>{{ m.client }}</strong> — {{ m.datetime }} <br>
+                  <em>{{ m.purpose }}</em>
+                  <span class="badge bg-secondary">{{ m.status }}</span>
+                </li>
+                <hr>
+              {% else %}
+                <li class="text-muted">No requests yet.</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Socket & Logic -->
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <script>
+    const socket = io();
+    const room = "{{ room }}";
+    const clientName = "{{ client_name or 'Client' }}";
+
+    socket.emit('join', { room: room, user: clientName, role: 'client' });
+
+    socket.on('message', function(msg) { appendMessage(msg); });
+    socket.on('user_joined', function(msg) { appendSystem(msg.text); });
+    socket.on('user_left', function(msg) { appendSystem(msg.text); });
+    socket.on('meeting_requested', function(data) {
+      appendSystem("New meeting requested: " + (data.meeting.purpose || "(no purpose)"));
+      const ul = document.getElementById('meeting_list');
+      const li = document.createElement('li');
+      li.className = "mb-2";
+      li.innerHTML = `<strong>${data.meeting.client}</strong> — ${data.meeting.datetime}<br>
+                      <em>${data.meeting.purpose}</em> 
+                      <span class="badge bg-secondary">${data.meeting.status}</span>`;
+      ul.prepend(li);
+    });
+
+    function appendMessage(m) {
+      const container = document.getElementById('chat');
+      const div = document.createElement('div');
+      div.className = 'msg ' + (m.sender === clientName ? 'self' : 'other');
+      div.innerHTML = `<div><strong>${escapeHtml(m.sender)}</strong></div>
+                       <div>${escapeHtml(m.text)}</div>
+                       <span class="meta">${m.timestamp}</span>`;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function appendSystem(text) {
+      const container = document.getElementById('chat');
+      const div = document.createElement('div');
+      div.className = 'system';
+      div.textContent = text;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    document.getElementById('send_btn').addEventListener('click', function(){
+      const input = document.getElementById('message_input');
+      const text = input.value.trim();
+      if(!text) return;
+      socket.emit('send_message', { room: room, sender: clientName, text: text });
+      input.value = '';
+    });
+
+    document.getElementById('message_input').addEventListener('keydown', function(e){
+      if(e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('send_btn').click();
+      }
+    });
+
+    document.getElementById('schedule_form').addEventListener('submit', async function(e){
+      e.preventDefault();
+      const form = e.currentTarget;
+      const data = new FormData(form);
+      const payload = {};
+      data.forEach((v,k)=>payload[k]=v);
+      try {
+        const res = await fetch('/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+        const statusDiv = document.getElementById('schedule_status');
+        if(json.ok) {
+          statusDiv.innerHTML = '<div class="alert alert-success small">Meeting requested.</div>';
+          form.reset();
+        } else {
+          statusDiv.innerHTML = `<div class="alert alert-danger small">${json.error || 'Error'}</div>`;
+        }
+      } catch {
+        document.getElementById('schedule_status').innerHTML = '<div class="alert alert-danger small">Network error</div>';
+      }
+    });
+
+    function escapeHtml(str) {
+      return (str+'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+
+    window.addEventListener('beforeunload', function(){
+      socket.emit('leave', { room: room, user: clientName });
+    });
+
+    document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+  </script>
+</body>
+</html>
