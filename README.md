@@ -10,3 +10,9 @@ for activation :
 Windows (CMD/PowerShell):
 
 venv\Scripts\activate
+
+
+then run 
+
+python app.py
+
