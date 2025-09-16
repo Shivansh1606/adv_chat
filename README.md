@@ -9,7 +9,7 @@ for activation :
 
 Windows (CMD/PowerShell):
 
-venv\Scripts\activate  -->> after running this, it's look like in terminal -->>    something like that in your terminal:   (venv) C:\Users\ASUS\OneDrive\Desktop\DA\advocacy-chat>
+venv\Scripts\activate  -->> after running this, it's look like in terminal -->>    something like that in your terminal:   (venv)C:\Users\ASUS\OneDrive\Desktop\DA\advocacy-chat>
 
 
 
